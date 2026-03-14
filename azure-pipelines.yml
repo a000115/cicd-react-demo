@@ -1,34 +1,27 @@
-trigger:
-- main
-
-pool:
-  name: Default  # Default pool containing your self-hosted agent
-
 steps:
-# 1️⃣ Install Node.js
 - task: NodeTool@0
   inputs:
     versionSpec: '20.x'
   displayName: 'Install Node.js'
 
-# 2️⃣ Install dependencies and build React app
 - script: |
     npm install
     npm run build
   displayName: 'npm install and build'
 
-# 3️⃣ Publish build artifact (optional but good practice)
+- script: dir "$(Build.SourcesDirectory)\build"
+  displayName: 'Check if build folder exists'
+
 - task: PublishBuildArtifacts@1
   inputs:
-    PathtoPublish: '$(System.DefaultWorkingDirectory)/build'
+    PathtoPublish: '$(Build.SourcesDirectory)/build'
     ArtifactName: 'react-build'
     publishLocation: 'Container'
   displayName: 'Publish React Build Artifact'
 
-# 4️⃣ Deploy to Azure Web App
 - task: AzureWebApp@1
   inputs:
-    azureSubscription: 'admin-cicd-1'           # Your service connection
-    appName: 'cicdcd'                           # Your Azure Web App name
-    package: '$(System.DefaultWorkingDirectory)/build'  # React build folder
+    azureSubscription: 'admin-cicd-1'
+    appName: 'cicdcd'
+    package: '$(Build.SourcesDirectory)/build'
   displayName: 'Deploy React App to Azure Web App'
