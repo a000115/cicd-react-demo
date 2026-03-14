@@ -2,64 +2,49 @@ trigger:
 - main
 
 pool:
-  name: Default  # Self-hosted agent pool where react-agent is registered
+  name: Default  # Your self-hosted agent pool
+  vmImage: 'windows-latest'
 
 variables:
-  buildDir: '$(Build.SourcesDirectory)/build'
+  node_version: '20.x'
 
 steps:
-# --------------------------
-# 1️⃣ Install Node.js
-# --------------------------
+
+# 1️⃣ Checkout code
+- task: Checkout@1
+  displayName: 'Checkout repository'
+
+# 2️⃣ Install Node.js
 - task: NodeTool@0
   inputs:
-    versionSpec: '20.x'
+    versionSpec: '$(node_version)'
   displayName: 'Install Node.js'
 
-# --------------------------
-# 2️⃣ Install dependencies and build React app
-# --------------------------
+# 3️⃣ Install npm packages
 - script: |
-    echo "Current directory:"
-    cd
-    echo %cd%
-    
-    echo "Repo root:"
-    cd $(Build.SourcesDirectory)
-    echo %cd%
-    
-    echo "Contents before install:"
-    dir
-    
     npm install
-    npm run build
+  displayName: 'Install npm packages'
   workingDirectory: '$(Build.SourcesDirectory)'
-  displayName: 'Install npm packages and build React app'
 
-# --------------------------
-# 3️⃣ Debug: Check build folder exists
-# --------------------------
+# 4️⃣ Build React app
 - script: |
-    echo "Listing build folder:"
-    dir "$(buildDir)"
+    npm run build
+  displayName: 'Build React app'
+  workingDirectory: '$(Build.SourcesDirectory)'
+
+# 5️⃣ Check build folder exists (PowerShell safe check)
+- powershell: |
+    if (Test-Path "$(Build.SourcesDirectory)\build") {
+      Write-Host "✅ Build folder exists."
+    } else {
+      Write-Error "❌ Build folder not found!"
+    }
   displayName: 'Check build folder exists'
 
-# --------------------------
-# 4️⃣ Publish React build artifact
-# --------------------------
-- task: PublishBuildArtifacts@1
+# 6️⃣ Publish build artifact
+- task: PublishPipelineArtifact@1
   inputs:
-    PathtoPublish: '$(buildDir)'
-    ArtifactName: 'react-build'
-    publishLocation: 'Container'
-  displayName: 'Publish React Build Artifact'
-
-# --------------------------
-# 5️⃣ Deploy React build to Azure Web App
-# --------------------------
-- task: AzureWebApp@1
-  inputs:
-    azureSubscription: 'admin-cicd-1'  # Service connection name
-    appName: 'cicdcd'                  # Your Azure Web App name
-    package: '$(buildDir)'
-  displayName: 'Deploy React App to Azure Web App'
+    targetPath: '$(Build.SourcesDirectory)\build'
+    artifact: 'react-build'
+    publishLocation: 'pipeline'
+  displayName: 'Publish build artifact'
