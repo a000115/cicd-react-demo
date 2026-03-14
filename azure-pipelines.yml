@@ -2,11 +2,13 @@ trigger:
 - main
 
 pool:
-  name: Default  # Your self-hosted agent pool
+  name: Default  # your self-hosted agent pool
   vmImage: 'windows-latest'
 
 variables:
   node_version: '20.x'
+  source_dir: '$(System.DefaultWorkingDirectory)'  # fallback if Build.SourcesDirectory missing
+  build_dir: '$(System.DefaultWorkingDirectory)\build'
 
 steps:
 
@@ -21,20 +23,18 @@ steps:
   displayName: 'Install Node.js'
 
 # 3️⃣ Install npm packages
-- script: |
-    npm install
+- script: npm install
   displayName: 'Install npm packages'
-  workingDirectory: '$(Build.SourcesDirectory)'
+  workingDirectory: '$(source_dir)'
 
 # 4️⃣ Build React app
-- script: |
-    npm run build
+- script: npm run build
   displayName: 'Build React app'
-  workingDirectory: '$(Build.SourcesDirectory)'
+  workingDirectory: '$(source_dir)'
 
-# 5️⃣ Check build folder exists (PowerShell safe check)
+# 5️⃣ Check build folder exists
 - powershell: |
-    if (Test-Path "$(Build.SourcesDirectory)\build") {
+    if (Test-Path "$(build_dir)") {
       Write-Host "✅ Build folder exists."
     } else {
       Write-Error "❌ Build folder not found!"
@@ -44,7 +44,7 @@ steps:
 # 6️⃣ Publish build artifact
 - task: PublishPipelineArtifact@1
   inputs:
-    targetPath: '$(Build.SourcesDirectory)\build'
+    targetPath: '$(build_dir)'
     artifact: 'react-build'
     publishLocation: 'pipeline'
   displayName: 'Publish build artifact'
