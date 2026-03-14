@@ -2,32 +2,64 @@ trigger:
 - main
 
 pool:
-  name: Default  # Use self-hosted agent
+  name: Default  # Self-hosted agent pool where react-agent is registered
+
+variables:
+  buildDir: '$(Build.SourcesDirectory)/build'
 
 steps:
+# --------------------------
+# 1️⃣ Install Node.js
+# --------------------------
 - task: NodeTool@0
   inputs:
     versionSpec: '20.x'
   displayName: 'Install Node.js'
 
+# --------------------------
+# 2️⃣ Install dependencies and build React app
+# --------------------------
 - script: |
+    echo "Current directory:"
+    cd
+    echo %cd%
+    
+    echo "Repo root:"
+    cd $(Build.SourcesDirectory)
+    echo %cd%
+    
+    echo "Contents before install:"
+    dir
+    
     npm install
     npm run build
-  displayName: 'npm install and build'
+  workingDirectory: '$(Build.SourcesDirectory)'
+  displayName: 'Install npm packages and build React app'
 
-- script: dir "$(Build.SourcesDirectory)\build"
-  displayName: 'Check if build folder exists'
+# --------------------------
+# 3️⃣ Debug: Check build folder exists
+# --------------------------
+- script: |
+    echo "Listing build folder:"
+    dir "$(buildDir)"
+  displayName: 'Check build folder exists'
 
+# --------------------------
+# 4️⃣ Publish React build artifact
+# --------------------------
 - task: PublishBuildArtifacts@1
   inputs:
-    PathtoPublish: '$(Build.SourcesDirectory)/build'
+    PathtoPublish: '$(buildDir)'
     ArtifactName: 'react-build'
     publishLocation: 'Container'
   displayName: 'Publish React Build Artifact'
 
+# --------------------------
+# 5️⃣ Deploy React build to Azure Web App
+# --------------------------
 - task: AzureWebApp@1
   inputs:
-    azureSubscription: 'admin-cicd-1'
-    appName: 'cicdcd'
-    package: '$(Build.SourcesDirectory)/build'
+    azureSubscription: 'admin-cicd-1'  # Service connection name
+    appName: 'cicdcd'                  # Your Azure Web App name
+    package: '$(buildDir)'
   displayName: 'Deploy React App to Azure Web App'
