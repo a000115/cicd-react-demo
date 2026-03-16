@@ -77,6 +77,6 @@ stages:
             displayName: Deploy to Azure Web App
             inputs:
               azureSubscription: CICD-service-connection
-              appType: webAppLinux
-              appName: cicdcd
+              appType: webApp
+              appName: ciabhi
               package: $(Pipeline.Workspace)/react-build/react-build.zip
