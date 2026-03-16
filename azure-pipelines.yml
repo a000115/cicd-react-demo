@@ -1,5 +1,5 @@
 trigger:
-  - main
+- main
 
 variables:
   node_version: '20.x'
@@ -8,78 +8,75 @@ variables:
 
 stages:
 
-# 1️⃣ Build Stage (CI)
+# ---------------- BUILD STAGE ----------------
 - stage: Build
-  displayName: 'Build React App'
+  displayName: Build React App
   jobs:
   - job: BuildJob
     pool:
       name: Default
+
     steps:
+    - checkout: self
 
-      # Checkout code
-      - checkout: self
-        displayName: 'Checkout repository'
+    # Install Node
+    - task: NodeTool@0
+      inputs:
+        versionSpec: $(node_version)
+      displayName: Install Node.js
 
-      # Install Node.js
-      - task: NodeTool@0
-        inputs:
-          versionSpec: '$(node_version)'
-        displayName: 'Install Node.js'
+    # Install dependencies
+    - script: npm install
+      workingDirectory: $(source_dir)
+      displayName: Install npm packages
 
-      # Install npm packages
-      - script: npm install
-        displayName: 'Install npm packages'
-        workingDirectory: '$(source_dir)'
+    # Build React app
+    - script: npm run build
+      workingDirectory: $(source_dir)
+      displayName: Build React app
 
-      # Build React app
-      - script: npm run build
-        displayName: 'Build React app'
-        workingDirectory: '$(source_dir)'
+    # Archive build folder
+    - task: ArchiveFiles@2
+      displayName: Zip build folder
+      inputs:
+        rootFolderOrFile: $(build_dir)
+        includeRootFolder: false
+        archiveType: zip
+        archiveFile: $(Build.ArtifactStagingDirectory)/react-build.zip
+        replaceExistingArchive: true
 
-      # Check build folder exists
-      - powershell: |
-          Write-Host "Checking build folder..."
-          if (Test-Path '$(build_dir)') {
-              Write-Host "✅ Build folder exists."
-          } else {
-              Write-Warning "⚠️ Build folder not found. Skipping artifact publish."
-              exit 0
-          }
-        displayName: 'Check build folder exists'
+    # Publish artifact
+    - task: PublishPipelineArtifact@1
+      displayName: Publish artifact
+      inputs:
+        targetPath: $(Build.ArtifactStagingDirectory)/react-build.zip
+        artifact: react-build
 
-      # Publish build artifact
-      - task: PublishPipelineArtifact@1
-        condition: succeededOrFailed()
-        inputs:
-          targetPath: '$(build_dir)'
-          artifact: 'react-build'
-          publishLocation: 'pipeline'
-        displayName: 'Publish build artifact'
-
-# 2️⃣ Deploy Stage (CD)
+# ---------------- DEPLOY STAGE ----------------
 - stage: Deploy
-  displayName: 'Deploy React App to Azure Web App'
+  displayName: Deploy React App
   dependsOn: Build
+
   jobs:
   - deployment: DeployJob
-    displayName: 'Deploy React App'
-    environment: 'production'  # optional, helps track deployments
+    environment: production
     pool:
       name: Default
+
     strategy:
       runOnce:
         deploy:
           steps:
 
-                       # 1️⃣ Download the build artifact
-            - download: current
-              artifact: 'react-build'
+          # Download artifact
+          - download: current
+            artifact: react-build
 
-            # 2️⃣ Deploy to Azure Web App
-            - task: AzureWebApp@1
-              inputs:
-                azureSubscription: 'CICD-service-connection'
-                appType: 'webAppLinux'
-                appName: 'cicdcd'
-                package: '$(Pipeline.Workspace)/react-build/*'
+          # Deploy to Azure Web App
+          - task: AzureWebApp@1
+            displayName: Deploy to Azure Web App
+            inputs:
+              azureSubscription: CICD-service-connection
+              appType: webAppLinux
+              appName: cicdcd
+              package: $(Pipeline.Workspace)/react-build/react-build.zip
