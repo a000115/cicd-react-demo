@@ -72,14 +72,14 @@ stages:
         deploy:
           steps:
 
-            # 1️⃣ Download the build artifact
+                       # 1️⃣ Download the build artifact
             - download: current
               artifact: 'react-build'
 
             # 2️⃣ Deploy to Azure Web App
             - task: AzureWebApp@1
               inputs:
-                azureSubscription: 'admin-cicd-1'   # your service connection
+                azureSubscription: 'CICD-service-connection'
                 appType: 'webAppLinux'
                 appName: 'cicdcd'
-                package: '$(Pipeline.Workspace)/react-build'
+                package: '$(Pipeline.Workspace)/react-build/*'
