@@ -1,5 +1,5 @@
 trigger:
-- main
+- '*'
 
 variables:
   node_version: '20.x'
@@ -11,33 +11,27 @@ stages:
 # ---------------- BUILD STAGE ----------------
 - stage: Build
   displayName: Build React App
-
   jobs:
   - job: BuildJob
     pool:
       name: Default
 
     steps:
-
     - checkout: self
 
-    # Install Node
     - task: NodeTool@0
-      displayName: Install Node.js
       inputs:
         versionSpec: $(node_version)
+      displayName: Install Node.js
 
-    # Install dependencies
     - script: npm install
       workingDirectory: $(source_dir)
       displayName: Install npm packages
 
-    # Build React app
     - script: npm run build
       workingDirectory: $(source_dir)
-      displayName: Build React App
+      displayName: Build React app
 
-    # Archive build
     - task: ArchiveFiles@2
       displayName: Zip build folder
       inputs:
@@ -47,9 +41,8 @@ stages:
         archiveFile: $(Build.ArtifactStagingDirectory)/react-build.zip
         replaceExistingArchive: true
 
-    # Publish artifact
     - task: PublishPipelineArtifact@1
-      displayName: Publish Artifact
+      displayName: Publish artifact
       inputs:
         targetPath: $(Build.ArtifactStagingDirectory)/react-build.zip
         artifact: react-build
@@ -57,27 +50,25 @@ stages:
 
 # ---------------- CI APPROVAL ----------------
 - stage: CI_Approval
-  displayName: CI Approval Gate
+  displayName: CI Approval
   dependsOn: Build
-
   jobs:
   - job: WaitForApproval
-    displayName: Waiting for CI Approval
     pool: server
-
     steps:
     - task: ManualValidation@0
+      timeoutInMinutes: 1440
       inputs:
-        notifyUsers: 'Manoj.Kumar@ifi.tech'
-        instructions: 'Build completed. Please approve to start deployment pipeline.'
-        onTimeout: 'reject'
+        notifyUsers: |
+          Manoj.Kumar@ifi.tech
+        instructions: 'Please approve to continue deployment to DEV.'
+        onTimeout: reject
 
 
 # ---------------- DEV DEPLOY ----------------
 - stage: Deploy_DEV
   displayName: Deploy to DEV
   dependsOn: CI_Approval
-
   jobs:
   - deployment: DeployDev
     environment: dev-cicd
@@ -105,7 +96,6 @@ stages:
 - stage: Deploy_UAT
   displayName: Deploy to UAT
   dependsOn: Deploy_DEV
-
   jobs:
   - deployment: DeployUAT
     environment: uat-cicd
@@ -134,6 +124,8 @@ stages:
   displayName: Deploy to Production
   dependsOn: Deploy_UAT
 
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+
   jobs:
   - deployment: DeployProd
     environment: production
@@ -149,7 +141,7 @@ stages:
             artifact: react-build
 
           - task: AzureWebApp@1
-            displayName: Deploy to Production Web App
+            displayName: Deploy to PROD Web App
             inputs:
               azureSubscription: CICD-service-connection
               appType: webApp
