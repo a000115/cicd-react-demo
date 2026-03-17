@@ -11,19 +11,21 @@ stages:
 # ---------------- BUILD STAGE ----------------
 - stage: Build
   displayName: Build React App
+
   jobs:
   - job: BuildJob
     pool:
       name: Default
 
     steps:
+
     - checkout: self
 
     # Install Node
     - task: NodeTool@0
+      displayName: Install Node.js
       inputs:
         versionSpec: $(node_version)
-      displayName: Install Node.js
 
     # Install dependencies
     - script: npm install
@@ -33,9 +35,9 @@ stages:
     # Build React app
     - script: npm run build
       workingDirectory: $(source_dir)
-      displayName: Build React app
+      displayName: Build React App
 
-    # Archive build folder
+    # Archive build
     - task: ArchiveFiles@2
       displayName: Zip build folder
       inputs:
@@ -47,18 +49,93 @@ stages:
 
     # Publish artifact
     - task: PublishPipelineArtifact@1
-      displayName: Publish artifact
+      displayName: Publish Artifact
       inputs:
         targetPath: $(Build.ArtifactStagingDirectory)/react-build.zip
         artifact: react-build
 
-# ---------------- DEPLOY STAGE ----------------
-- stage: Deploy
-  displayName: Deploy React App
+
+# ---------------- CI APPROVAL ----------------
+- stage: CI_Approval
+  displayName: CI Approval Gate
   dependsOn: Build
 
   jobs:
-  - deployment: DeployJob
+  - job: WaitForApproval
+    displayName: Waiting for CI Approval
+    pool: server
+
+    steps:
+    - task: ManualValidation@0
+      inputs:
+        notifyUsers: 'Manoj.Kumar@ifi.tech'
+        instructions: 'Build completed. Please approve to start deployment pipeline.'
+        onTimeout: 'reject'
+
+
+# ---------------- DEV DEPLOY ----------------
+- stage: Deploy_DEV
+  displayName: Deploy to DEV
+  dependsOn: CI_Approval
+
+  jobs:
+  - deployment: DeployDev
+    environment: dev-cicd
+    pool:
+      name: Default
+
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+
+          - download: current
+            artifact: react-build
+
+          - task: AzureWebApp@1
+            displayName: Deploy to DEV Web App
+            inputs:
+              azureSubscription: CICD-service-connection
+              appType: webApp
+              appName: dev-cicd
+              package: $(Pipeline.Workspace)/react-build/react-build.zip
+
+
+# ---------------- UAT DEPLOY ----------------
+- stage: Deploy_UAT
+  displayName: Deploy to UAT
+  dependsOn: Deploy_DEV
+
+  jobs:
+  - deployment: DeployUAT
+    environment: uat-cicd
+    pool:
+      name: Default
+
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+
+          - download: current
+            artifact: react-build
+
+          - task: AzureWebApp@1
+            displayName: Deploy to UAT Web App
+            inputs:
+              azureSubscription: CICD-service-connection
+              appType: webApp
+              appName: uat-cicd
+              package: $(Pipeline.Workspace)/react-build/react-build.zip
+
+
+# ---------------- PROD DEPLOY ----------------
+- stage: Deploy_PROD
+  displayName: Deploy to Production
+  dependsOn: Deploy_UAT
+
+  jobs:
+  - deployment: DeployProd
     environment: production
     pool:
       name: Default
@@ -68,13 +145,11 @@ stages:
         deploy:
           steps:
 
-          # Download artifact
           - download: current
             artifact: react-build
 
-          # Deploy to Azure Web App
           - task: AzureWebApp@1
-            displayName: Deploy to Azure Web App
+            displayName: Deploy to Production Web App
             inputs:
               azureSubscription: CICD-service-connection
               appType: webApp
