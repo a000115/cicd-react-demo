@@ -47,6 +47,17 @@ stages:
         targetPath: $(Build.ArtifactStagingDirectory)/react-build.zip
         artifact: react-build
 
+    # 🔥 NEW: Docker Build & Push to ACR
+    - task: Docker@2
+      displayName: Build and Push to ACR
+      inputs:
+        containerRegistry: 'acr-connection'
+        repository: 'react-cicd-app'
+        command: 'buildAndPush'
+        Dockerfile: '**/Dockerfile'
+        tags: |
+          latest
+
 
 # ---------------- CI APPROVAL ----------------
 - stage: CI_Approval
@@ -65,7 +76,7 @@ stages:
         onTimeout: reject
 
 
-# ---------------- DEV DEPLOY ----------------
+# ---------------- DEV DEPLOY (WEB APP) ----------------
 - stage: Deploy_DEV
   displayName: Deploy to DEV
   dependsOn: CI_Approval
@@ -123,7 +134,6 @@ stages:
 - stage: Deploy_PROD
   displayName: Deploy to Production
   dependsOn: Deploy_UAT
-
   condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
 
   jobs:
@@ -147,3 +157,25 @@ stages:
               appType: webApp
               appName: ciabhi
               package: $(Pipeline.Workspace)/react-build/react-build.zip
+
+
+# ---------------- AKS DEPLOY ----------------
+- stage: Deploy_AKS
+  displayName: Deploy to AKS
+  dependsOn: Deploy_DEV   # 👈 change to UAT/PROD if needed
+  jobs:
+  - job: DeployToAKS
+    pool:
+      name: Default
+
+    steps:
+    - task: Kubernetes@1
+      displayName: Deploy to AKS Cluster
+      inputs:
+        connectionType: 'Azure Resource Manager'
+        azureSubscriptionEndpoint: 'CICD-service-connection'
+        azureResourceGroup: 'cicd'
+        kubernetesCluster: 'cicd-react-aks'
+        command: apply
+        useConfigurationFile: true
+        configuration: 'react-deployment.yaml'
