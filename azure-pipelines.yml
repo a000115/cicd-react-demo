@@ -173,7 +173,7 @@ stages:
       displayName: Deploy to AKS Cluster
       inputs:
         connectionType: 'Azure Resource Manager'
-        azureSubscriptionEndpoint: 'CICD-service-connection'
+        azureSubscriptionEndpoint: 'acr-connection'
         azureResourceGroup: 'cicd'
         kubernetesCluster: 'cicd-react-aks'
         command: apply
