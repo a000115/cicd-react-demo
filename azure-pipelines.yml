@@ -5,6 +5,7 @@ variables:
   node_version: '20.x'
   source_dir: '$(System.DefaultWorkingDirectory)'
   build_dir: '$(System.DefaultWorkingDirectory)/build'
+  image_name: 'react-cicd-app'
 
 stages:
 
@@ -47,17 +48,16 @@ stages:
         targetPath: $(Build.ArtifactStagingDirectory)/react-build.zip
         artifact: react-build
 
-    # 🔥 NEW: Docker Build & Push to ACR
+    # 🔥 Docker Build & Push using SAME service connection
     - task: Docker@2
       displayName: Build and Push to ACR
       inputs:
-        containerRegistry: 'acr-connection'
-        repository: 'react-cicd-app'
+        containerRegistry: 'cicd-react-abhishek'
+        repository: $(image_name)
         command: 'buildAndPush'
         Dockerfile: '**/Dockerfile'
         tags: |
           latest
-
 
 # ---------------- CI APPROVAL ----------------
 - stage: CI_Approval
@@ -75,8 +75,7 @@ stages:
         instructions: 'Please approve to continue deployment to DEV.'
         onTimeout: reject
 
-
-# ---------------- DEV DEPLOY (WEB APP) ----------------
+# ---------------- DEV DEPLOY ----------------
 - stage: Deploy_DEV
   displayName: Deploy to DEV
   dependsOn: CI_Approval
@@ -97,11 +96,10 @@ stages:
           - task: AzureWebApp@1
             displayName: Deploy to DEV Web App
             inputs:
-              azureSubscription: CICD-service-connection
+              azureSubscription: 'cicd-react-abhishek'
               appType: webApp
               appName: dev-cicd
               package: $(Pipeline.Workspace)/react-build/react-build.zip
-
 
 # ---------------- UAT DEPLOY ----------------
 - stage: Deploy_UAT
@@ -124,11 +122,10 @@ stages:
           - task: AzureWebApp@1
             displayName: Deploy to UAT Web App
             inputs:
-              azureSubscription: CICD-service-connection
+              azureSubscription: 'cicd-react-abhishek'
               appType: webApp
               appName: uat-cicd
               package: $(Pipeline.Workspace)/react-build/react-build.zip
-
 
 # ---------------- PROD DEPLOY ----------------
 - stage: Deploy_PROD
@@ -153,16 +150,15 @@ stages:
           - task: AzureWebApp@1
             displayName: Deploy to PROD Web App
             inputs:
-              azureSubscription: CICD-service-connection
+              azureSubscription: 'cicd-react-abhishek'
               appType: webApp
               appName: ciabhi
               package: $(Pipeline.Workspace)/react-build/react-build.zip
 
-
 # ---------------- AKS DEPLOY ----------------
 - stage: Deploy_AKS
   displayName: Deploy to AKS
-  dependsOn: Deploy_DEV   # 👈 change to UAT/PROD if needed
+  dependsOn: Deploy_DEV
   jobs:
   - job: DeployToAKS
     pool:
@@ -173,7 +169,7 @@ stages:
       displayName: Deploy to AKS Cluster
       inputs:
         connectionType: 'Azure Resource Manager'
-        azureSubscriptionEndpoint: 'acr-connection'
+        azureSubscriptionEndpoint: 'cicd-react-abhishek'
         azureResourceGroup: 'cicd'
         kubernetesCluster: 'cicd-react-aks'
         command: apply
