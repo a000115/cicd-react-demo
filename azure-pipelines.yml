@@ -49,7 +49,7 @@ stages:
         targetPath: $(Build.ArtifactStagingDirectory)/react-build.zip
         artifact: react-build
 
-    # 🔥 BUILD & PUSH DOCKER IMAGE USING AZ CLI
+    #  BUILD & PUSH DOCKER IMAGE USING AZ CLI
     - task: AzureCLI@2
       displayName: Build & Push Image to ACR
       inputs:
