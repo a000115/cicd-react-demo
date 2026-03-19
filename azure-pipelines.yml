@@ -6,6 +6,7 @@ variables:
   source_dir: '$(System.DefaultWorkingDirectory)'
   build_dir: '$(System.DefaultWorkingDirectory)/build'
   image_name: 'react-cicd-app'
+  acr_name: 'cicdreactacr'
 
 stages:
 
@@ -48,16 +49,22 @@ stages:
         targetPath: $(Build.ArtifactStagingDirectory)/react-build.zip
         artifact: react-build
 
-    # 🔥 Docker Build & Push using SAME service connection
-    - task: Docker@2
-      displayName: Build and Push to ACR
+    # 🔥 BUILD & PUSH DOCKER IMAGE USING AZ CLI
+    - task: AzureCLI@2
+      displayName: Build & Push Image to ACR
       inputs:
-        containerRegistry: 'cicd-react-abhishek'
-        repository: $(image_name)
-        command: 'buildAndPush'
-        Dockerfile: '**/Dockerfile'
-        tags: |
-          latest
+        azureSubscription: 'cicd-react-abhishek'
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          echo "Login to Azure Container Registry"
+          az acr login --name $(acr_name)
+
+          echo "Build Docker image"
+          docker build -t $(acr_name).azurecr.io/$(image_name):latest .
+
+          echo "Push Docker image"
+          docker push $(acr_name).azurecr.io/$(image_name):latest
 
 # ---------------- CI APPROVAL ----------------
 - stage: CI_Approval
