@@ -54,7 +54,7 @@ stages:
       displayName: Build & Push Image to ACR
       inputs:
         azureSubscription: 'cicd-react-abhishek'
-        scriptType: bash
+        scriptType: ps
         scriptLocation: inlineScript
         inlineScript: |
           echo "Login to Azure Container Registry"
