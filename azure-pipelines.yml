@@ -3,14 +3,11 @@ trigger:
 
 variables:
   node_version: '20.x'
-  source_dir: '$(System.DefaultWorkingDirectory)'
-  build_dir: '$(System.DefaultWorkingDirectory)/build'
   image_name: 'react-cicd-app'
-  acr_name: 'cicdreactacr'
 
 stages:
 
-# ---------------- BUILD STAGE ----------------
+# ---------------- BUILD ----------------
 - stage: Build
   displayName: Build React App
   jobs:
@@ -27,64 +24,56 @@ stages:
       displayName: Install Node.js
 
     - script: npm install
-      workingDirectory: $(source_dir)
-      displayName: Install npm packages
+      displayName: Install dependencies
 
-    - script: npm run build
-      workingDirectory: $(source_dir)
-      displayName: Build React app
+    # Try both CRA and Vite builds safely
+    - script: |
+        npm run build || npm run build:prod
+      displayName: Build application
+
+    # Detect build folder and copy it safely
+    - script: |
+        if exist build (
+          echo Using build folder
+          robocopy build "$(Build.ArtifactStagingDirectory)/build" /E
+        ) else if exist dist (
+          echo Using dist folder
+          robocopy dist "$(Build.ArtifactStagingDirectory)/build" /E
+        ) else (
+          echo Build folder not found!
+          exit 1
+        )
+      displayName: Prepare build artifacts
 
     - task: ArchiveFiles@2
-      displayName: Zip build folder
       inputs:
-        rootFolderOrFile: $(build_dir)
+        rootFolderOrFile: '$(Build.ArtifactStagingDirectory)/build'
         includeRootFolder: false
         archiveType: zip
-        archiveFile: $(Build.ArtifactStagingDirectory)/react-build.zip
+        archiveFile: '$(Build.ArtifactStagingDirectory)/react-build.zip'
         replaceExistingArchive: true
 
     - task: PublishPipelineArtifact@1
-      displayName: Publish artifact
       inputs:
-        targetPath: $(Build.ArtifactStagingDirectory)/react-build.zip
+        targetPath: '$(Build.ArtifactStagingDirectory)/react-build.zip'
         artifact: react-build
 
-    # 🔥 BUILD & PUSH DOCKER IMAGE USING AZ CLI
-    - task: AzureCLI@2
-      displayName: Build & Push Image to ACR
-      inputs:
-        azureSubscription: 'cicd-react-abhishek'
-        scriptType: bash
-        scriptLocation: inlineScript
-        inlineScript: |
-          echo "Login to Azure Container Registry"
-          az acr login --name $(acr_name)
-
-          echo "Build Docker image"
-          docker build -t $(acr_name).azurecr.io/$(image_name):latest .
-
-          echo "Push Docker image"
-          docker push $(acr_name).azurecr.io/$(image_name):latest
-
-# ---------------- CI APPROVAL ----------------
+# ---------------- APPROVAL ----------------
 - stage: CI_Approval
-  displayName: CI Approval
+  displayName: Approval
   dependsOn: Build
   jobs:
-  - job: WaitForApproval
+  - job: ApprovalJob
     pool: server
     steps:
     - task: ManualValidation@0
-      timeoutInMinutes: 5
+      timeoutInMinutes: 30
       inputs:
-        notifyUsers: |
-          Manoj.Kumar@ifi.tech
-        instructions: 'Please approve to continue deployment to DEV.'
+        instructions: 'Approve deployment'
         onTimeout: reject
 
-# ---------------- DEV DEPLOY ----------------
+# ---------------- DEPLOY DEV ----------------
 - stage: Deploy_DEV
-  displayName: Deploy to DEV
   dependsOn: CI_Approval
   jobs:
   - deployment: DeployDev
@@ -96,21 +85,18 @@ stages:
       runOnce:
         deploy:
           steps:
-
           - download: current
             artifact: react-build
 
           - task: AzureWebApp@1
-            displayName: Deploy to DEV Web App
             inputs:
               azureSubscription: 'cicd-react-abhishek'
               appType: webApp
               appName: dev-cicd
-              package: $(Pipeline.Workspace)/react-build/react-build.zip
+              package: '$(Pipeline.Workspace)/react-build/react-build.zip'
 
-# ---------------- UAT DEPLOY ----------------
+# ---------------- DEPLOY UAT ----------------
 - stage: Deploy_UAT
-  displayName: Deploy to UAT
   dependsOn: Deploy_DEV
   jobs:
   - deployment: DeployUAT
@@ -122,24 +108,20 @@ stages:
       runOnce:
         deploy:
           steps:
-
           - download: current
             artifact: react-build
 
           - task: AzureWebApp@1
-            displayName: Deploy to UAT Web App
             inputs:
               azureSubscription: 'cicd-react-abhishek'
               appType: webApp
               appName: uat-cicd
-              package: $(Pipeline.Workspace)/react-build/react-build.zip
+              package: '$(Pipeline.Workspace)/react-build/react-build.zip'
 
-# ---------------- PROD DEPLOY ----------------
+# ---------------- DEPLOY PROD ----------------
 - stage: Deploy_PROD
-  displayName: Deploy to Production
   dependsOn: Deploy_UAT
   condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
-
   jobs:
   - deployment: DeployProd
     environment: production
@@ -150,35 +132,12 @@ stages:
       runOnce:
         deploy:
           steps:
-
           - download: current
             artifact: react-build
 
           - task: AzureWebApp@1
-            displayName: Deploy to PROD Web App
             inputs:
               azureSubscription: 'cicd-react-abhishek'
               appType: webApp
               appName: ciabhi
-              package: $(Pipeline.Workspace)/react-build/react-build.zip
-
-# ---------------- AKS DEPLOY ----------------
-- stage: Deploy_AKS
-  displayName: Deploy to AKS
-  dependsOn: Deploy_DEV
-  jobs:
-  - job: DeployToAKS
-    pool:
-      name: Default
-
-    steps:
-    - task: Kubernetes@1
-      displayName: Deploy to AKS Cluster
-      inputs:
-        connectionType: 'Azure Resource Manager'
-        azureSubscriptionEndpoint: 'cicd-react-abhishek'
-        azureResourceGroup: 'cicd'
-        kubernetesCluster: 'cicd-react-aks'
-        command: apply
-        useConfigurationFile: true
-        configuration: 'react-deployment.yaml'
+              package: '$(Pipeline.Workspace)/react-build/react-build.zip'
